@@ -24,7 +24,8 @@ REQUIRED_COLS = ["sample_id", "he_path", "dapi_path", "xenium_cells"]
 def load_config(path):
     cfg = dict(DEFAULTS)
     if path and os.path.exists(path):
-        cfg.update(json.load(open(path)))
+        with open(path) as _f:
+            cfg.update(json.load(_f))
     return cfg
 
 

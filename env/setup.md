@@ -6,7 +6,7 @@ StarDist and QC deps coexist). Only the **valis** env needs the patch below.
 ## 1. valis env (registration + image warp)
 
 HEST ships a vendored fork of valis as the `valis_hest` package. Build an env with it plus a
-working Java (BioFormats uses jpype/JVM):
+working Java ([BioFormats](https://www.openmicroscopy.org/bio-formats/) uses jpype/JVM):
 
 ```bash
 conda create -n valis_hest python=3.10 openjdk maven -y

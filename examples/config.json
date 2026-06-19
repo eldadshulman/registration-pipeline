@@ -1,0 +1,6 @@
+{
+  "pixel_um": 0.2125,
+  "output_dir": "./output",
+  "valis_env": "/path/to/valis_hest_env",
+  "centroids_in_um": true
+}

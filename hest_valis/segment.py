@@ -51,4 +51,6 @@ def segment_he(wsi_path, tile=2048, overlap=128, prob_blank=235, model=None):
             cy, cx = p["centroid-0"] + ya, p["centroid-1"] + xa
             core = (cy >= y0) & (cy < min(y0 + tile, H)) & (cx >= x0) & (cx < min(x0 + tile, W))
             rows.extend(zip(cx[core], cy[core]))
+    if not rows:
+        return np.empty((0, 2), dtype=float)
     return np.asarray(rows, dtype=float)

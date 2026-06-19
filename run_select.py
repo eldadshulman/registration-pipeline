@@ -35,7 +35,9 @@ def main():
         if not os.path.exists(qp):
             rows.append({"sample_id": sid, "status": "no_qc"})
             continue
-        q = json.load(open(qp)); d = q["decision"]; M = q["metrics"]
+        with open(qp) as _f:
+            q = json.load(_f)
+        d = q["decision"]; M = q["metrics"]
         rows.append({
             "sample_id": sid, "status": "ok",
             "micro_med": g(M, "micro", "nucleus_coincidence", "median_um"),

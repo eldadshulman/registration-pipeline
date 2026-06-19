@@ -2,5 +2,5 @@ __pycache__/
 *.pyc
 output/
 logs/
-config.json
-samples.csv
+/config.json
+/samples.csv

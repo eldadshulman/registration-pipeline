@@ -1,11 +1,23 @@
 # HEST-VALIS: H&E to Xenium single-cell registration + QC
 
-Align an H&E whole-slide image onto its matched Xenium spatial dataset, at single-cell
-accuracy, and certify the alignment with quantitative QC. Each slide automatically gets the
-registration setting (micro non-rigid refinement, or not) that aligns it best.
+Align an H&E whole-slide image onto its matched Xenium spatial dataset, **targeting** single-cell
+accuracy (a median nucleus offset below ~10 um, the size of one cell) and certifying it with
+quantitative QC. Each slide automatically gets the registration setting (micro non-rigid
+refinement, or not) that aligns it best.
 
 The output is a **warped H&E image in the Xenium coordinate frame** plus a **per-slide QC
 report**, so every transcript / cell can be placed on the right piece of tissue.
+
+> Built on [VALIS](https://github.com/MathOnco/valis), the HEST
+> [`register_dapi_he`](https://github.com/mahmoodlab/HEST) recipe, and
+> [StarDist](https://github.com/stardist/stardist) (the `2D_versatile_he` model). **If you use
+> this pipeline, please also cite the upstream tools** -- see [Credits](#credits) and
+> `CITATION.cff`.
+
+Why this is needed: 10x's own documentation notes the post-Xenium H&E is imaged on a *different*
+microscope and is **not pre-registered** to the Xenium data
+([Understanding Xenium Outputs](https://www.10xgenomics.com/support/software/xenium-onboard-analysis/latest/analysis/xoa-output-understanding-outputs)),
+so it must be registered before transcripts can be placed on H&E tissue.
 
 ---
 
@@ -19,8 +31,8 @@ report**, so every transcript / cell can be placed on the right piece of tissue.
 3. **QC** each variant: warp the H&E nuclei (StarDist) into the Xenium frame and compare to the
    Xenium nuclei. Four checks (below).
 4. **Select** micro vs no-micro **per slide** by a simple rule, so the cohort is a mix.
-5. **Warp the full H&E image** with the chosen setting into the Xenium frame -> registered
-   OME-TIFF.
+5. **Warp the full H&E image** with the chosen setting into the Xenium frame -> a registered
+   [OME-TIFF](https://ome-model.readthedocs.io/en/stable/ome-tiff/).
 6. **Transfer per-cell annotations**: derive an H&E region map (tumor / stroma / background)
    and tag every Xenium cell with the region it falls in.
 
@@ -78,8 +90,8 @@ sbatch --array=0-$(( $(tail -n +2 output/wsi_manifest.csv | wc -l) - 1 )) slurm/
 |--------|------|
 | `sample_id` | unique name; becomes the per-sample output folder |
 | `he_path` | H&E whole-slide image (`.svs` / `.ome.tiff`), the moving image |
-| `dapi_path` | Xenium DAPI `morphology_focus/ch0000_dapi.ome.tif`, the fixed reference |
-| `xenium_cells` | Xenium `cells.parquet` (centroids in microns) for QC |
+| `dapi_path` | Xenium DAPI image, the fixed reference. Raw 10x output is `morphology_focus/morphology_focus_0000.ome.tif` (channel 0 = DAPI); HEST renames it to `morphology_focus/ch0000_dapi.ome.tif`. Point at whichever you have. |
+| `xenium_cells` | Xenium [`cells.parquet`](https://www.10xgenomics.com/support/software/xenium-onboard-analysis/latest/analysis/xoa-output-understanding-outputs) (cell centroids in microns) for QC |
 
 ## Outputs (under `output/<sample_id>/`)
 
@@ -94,6 +106,13 @@ cell_labels.parquet        per-cell annotation: cell_id, x_um, y_um, he_region
 region_overlay.png         tumor/stroma/background region map (QC)
 ```
 Cohort level (under `output/`): `per_slide_decision.csv`, `wsi_manifest.csv`.
+
+## Optional flags (`run_qc.py`)
+
+| flag | effect |
+|------|--------|
+| `--no-occupancy` | skip tissue-mask computation and the occupancy QC check (faster; use when DAPI quality is poor) |
+| `--no-coarse-fallback` | disable the automatic coarse rotation/flip rescue for slides with negative density-r |
 
 ## Run without SLURM (one slide, interactively)
 
@@ -143,8 +162,9 @@ reflection inside VALIS fixes it, because the starting orientation is wrong.
 `coarse_align` automatically: it searches rotation x flip and, for each, finds the best
 translation by FFT phase correlation, scoring by nuclei-density agreement. If it beats the
 failed registration it is selected (`rule = coarse_rescue_negative_density_r`) and saved as
-`he_nuclei_coarse.npy`. In testing this turned a real 270-degree-rotated slide from density-r
--0.13 into +0.76 with zero manual input. Disable with `--no-coarse-fallback`.
+`he_nuclei_coarse.npy`. (On one internal slide -- a 270-degree rotation -- this moved density-r
+from -0.13 to +0.76 with no manual input; treat that as a single illustrative observation, not a
+benchmark.) Disable with `--no-coarse-fallback`.
 
 The coarse fallback fixes the nuclei, QC and annotation. To turn that into a FULL registration
 (proper micro / no-micro + a warpable image), `run_rescue.py` finishes the job automatically: it
@@ -187,19 +207,42 @@ examples/          config.json + samples.csv templates
 - **Registrar pickle is not reloadable** -> register and warp in the same process (the scripts
   do this). To get both QC variants cheaply, `run_register.py` warps nuclei before and after
   `register_micro` from one registration.
-- **Pixel size** -> set `pixel_um` to your DAPI um/pixel (Xenium is 0.2125).
+- **Pixel size** -> set `pixel_um` to your DAPI um/pixel
+  ([Xenium is 0.2125](https://www.10xgenomics.com/support/software/xenium-onboard-analysis/latest/analysis/xoa-output-understanding-outputs);
+  centroids are in microns, so pixels = microns / pixel size, origin top-left).
 
 ## Credits
 
-This pipeline stands on two pieces of work and would not exist without them:
+This pipeline stands on these works; please cite them if you use it (see also `CITATION.cff`).
 
-- **VALIS** -- the whole-slide image registration engine used here.
-  Gatenbee et al., "Virtual Alignment of pathoLogy Image Series for multi-gene analysis,"
-  *Nature Communications* (2023). https://github.com/MathOnco/valis
-- **HEST / Mahmood Lab** -- the `register_dapi_he` recipe and the HEST-1k spatial
-  transcriptomics + histology resource that this registration approach is based on.
+- **VALIS** -- the whole-slide image registration engine.
+  Gatenbee et al., "Virtual alignment of pathology image series for multi-gigapixel whole slide
+  images," *Nature Communications* 14, 4502 (2023).
+  [doi:10.1038/s41467-023-40218-9](https://doi.org/10.1038/s41467-023-40218-9) -
+  [github.com/MathOnco/valis](https://github.com/MathOnco/valis)
+- **HEST / HEST-1k (Mahmood Lab)** -- the `register_dapi_he` recipe this builds on.
   Jaume et al., "HEST-1k: A Dataset for Spatial Transcriptomics and Histology Image Analysis,"
-  *NeurIPS* (2024). Mahmood Lab, https://github.com/mahmoodlab/HEST
+  *NeurIPS 2024* (Datasets & Benchmarks, Spotlight).
+  [arXiv:2406.16192](https://arxiv.org/abs/2406.16192) -
+  [github.com/mahmoodlab/HEST](https://github.com/mahmoodlab/HEST) - license **CC BY-NC-SA 4.0**.
+- **StarDist** -- H&E nuclei detection.
+  Schmidt et al., "Cell Detection with Star-convex Polygons," *MICCAI 2018*, pp. 265-273
+  [doi:10.1007/978-3-030-00934-2_30](https://doi.org/10.1007/978-3-030-00934-2_30); and for the
+  H&E model, Weigert & Schmidt, "Nuclei Instance Segmentation and Classification in Histopathology
+  Images with StarDist," *ISBIC 2022*.
+  [github.com/stardist/stardist](https://github.com/stardist/stardist).
+  The `2D_versatile_he` model was trained on MoNuSeg 2018 + TNBC (Naylor et al. 2018), which
+  bounds where it generalises -- expect to validate (or retrain) on tissue unlike that.
+- **Xenium outputs / coordinate frame** -- 10x Genomics,
+  [Understanding Xenium Outputs](https://www.10xgenomics.com/support/software/xenium-onboard-analysis/latest/analysis/xoa-output-understanding-outputs)
+  (origin top-left; 0.2125 um/px; the post-Xenium H&E is on a different microscope and not
+  pre-registered).
+- **BioFormats** ([openmicroscopy.org/bio-formats](https://www.openmicroscopy.org/bio-formats/))
+  and **OME-TIFF** ([ome-model docs](https://ome-model.readthedocs.io/en/stable/ome-tiff/)).
 
-Nuclei are detected with **StarDist** (Schmidt et al., MICCAI 2018). Please cite VALIS, HEST,
-and StarDist if you use this pipeline.
+## License
+
+**CC BY-NC-SA 4.0** (see `LICENSE`). This pipeline is built on the HEST recipe/resource, which is
+CC BY-NC-SA 4.0, so the repo adopts the same license to respect those terms. **Downstream and
+commercial use is constrained by the upstream (HEST) terms: non-commercial, share-alike.** VALIS
+and StarDist carry their own licenses -- consult those projects for theirs.

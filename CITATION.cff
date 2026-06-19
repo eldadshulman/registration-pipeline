@@ -1,0 +1,61 @@
+cff-version: 1.2.0
+message: >-
+  If you use this pipeline, please cite it AND the upstream tools it is built on
+  (VALIS, HEST, and StarDist), listed under references below.
+title: "HEST-VALIS: H&E to Xenium registration and concordance QC"
+abstract: >-
+  A pipeline that registers an H&E whole-slide image onto its matched Xenium
+  DAPI (HEST register_dapi_he recipe, VALIS), selects micro vs no-micro
+  registration per slide by concordance QC, transfers per-cell H&E-region
+  annotations, and self-heals grossly mis-oriented slides via a coarse
+  rotation/flip search.
+authors:
+  - family-names: Shulman
+    given-names: Eldad
+type: software
+license: CC-BY-NC-SA-4.0
+repository-code: "https://github.com/eldadshulman/registration-pipeline"
+references:
+  - type: article
+    title: "Virtual alignment of pathology image series for multi-gigapixel whole slide images"
+    authors:
+      - family-names: Gatenbee
+        given-names: Chandler D.
+    year: 2023
+    journal: "Nature Communications"
+    volume: 14
+    start: 4502
+    doi: 10.1038/s41467-023-40218-9
+    notes: "VALIS registration engine. Code: https://github.com/MathOnco/valis"
+  - type: conference-paper
+    title: "HEST-1k: A Dataset for Spatial Transcriptomics and Histology Image Analysis"
+    authors:
+      - family-names: Jaume
+        given-names: Guillaume
+    year: 2024
+    collection-title: "Advances in Neural Information Processing Systems (NeurIPS), Datasets and Benchmarks"
+    url: "https://arxiv.org/abs/2406.16192"
+    notes: "HEST / register_dapi_he recipe. Code: https://github.com/mahmoodlab/HEST (CC BY-NC-SA 4.0)"
+  - type: conference-paper
+    title: "Cell Detection with Star-convex Polygons"
+    authors:
+      - family-names: Schmidt
+        given-names: Uwe
+      - family-names: Weigert
+        given-names: Martin
+    year: 2018
+    collection-title: "MICCAI 2018"
+    start: 265
+    end: 273
+    doi: 10.1007/978-3-030-00934-2_30
+    notes: "StarDist. Code: https://github.com/stardist/stardist"
+  - type: conference-paper
+    title: "Nuclei Instance Segmentation and Classification in Histopathology Images with StarDist"
+    authors:
+      - family-names: Weigert
+        given-names: Martin
+      - family-names: Schmidt
+        given-names: Uwe
+    year: 2022
+    collection-title: "IEEE ISBIC 2022"
+    notes: "H&E StarDist model (2D_versatile_he), trained on MoNuSeg 2018 + TNBC (Naylor et al. 2018)."

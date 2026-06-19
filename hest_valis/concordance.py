@@ -34,6 +34,7 @@ def _mutual_nn(A, B, cutoff_px):
 
 
 def _density(P, nby, nbx, bin_px):
+    # Points outside [0, n*bin_px] are silently clipped by numpy histogram2d.
     H, _, _ = np.histogram2d(P[:, 1], P[:, 0], bins=[nby, nbx],
                              range=[[0, nby * bin_px], [0, nbx * bin_px]])
     return H
@@ -49,6 +50,10 @@ def compute_qc(he_px, xen_px, pixel_um, tissue_mask=None, mask_pixel_um=None):
     cutoff_px = CUTOFF_UM / um
     bin_px = BIN_UM / um
     R = {"pixel_um": um, "n_he": int(len(he_px)), "n_xenium": int(len(xen_px))}
+
+    if len(he_px) == 0 or len(xen_px) == 0:
+        return {"status": "no_nuclei", "pixel_um": um,
+                "n_he": int(len(he_px)), "n_xenium": int(len(xen_px))}
 
     # 1. nucleus coincidence
     d = _mutual_nn(xen_px, he_px, cutoff_px) * um

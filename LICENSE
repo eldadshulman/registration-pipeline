@@ -1,0 +1,31 @@
+SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+(CC BY-NC-SA 4.0)
+
+This project is licensed under CC BY-NC-SA 4.0. The full legal code is at:
+https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+A human-readable summary is at:
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+You are free to share and adapt this material, under these terms:
+
+  - Attribution (BY)   You must give appropriate credit, link to the license,
+                       and indicate if changes were made.
+  - NonCommercial (NC) You may not use the material for commercial purposes.
+  - ShareAlike (SA)    If you remix or build upon the material, you must
+                       distribute your contributions under the same license.
+
+WHY THIS LICENSE
+This pipeline is built on the HEST `register_dapi_he` recipe and the HEST-1k
+resource (Mahmood Lab), which are released under CC BY-NC-SA 4.0. To respect
+those upstream terms, this repository adopts the same license. As a result,
+DOWNSTREAM AND COMMERCIAL USE IS CONSTRAINED BY THE UPSTREAM (HEST) TERMS:
+non-commercial use only, with share-alike. If you need commercial terms, you
+must obtain them from the upstream authors; this license cannot grant them.
+
+VALIS (Gatenbee et al.) and StarDist (Schmidt et al.) carry their own licenses;
+consult those projects for their terms. See CITATION.cff and the README Credits
+section for citations.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.

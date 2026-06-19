@@ -32,11 +32,15 @@ def load_xenium_nuclei(cells_path, pixel_um, in_um=True):
     return xy
 
 
-def tissue_mask_from_dapi(dapi_path, level=4, thresh_frac=0.02):
+# Target maximum image dimension for the tissue mask (pixels); coarser = faster.
+_MASK_MAX_DIM = 4000
+
+def tissue_mask_from_dapi(dapi_path, thresh_frac=0.02):
     """Coarse tissue mask from the DAPI image (signal above background).
 
-    Returns (mask, mask_pixel_um_scale_factor) where the mask is at a downsampled level.
-    The caller passes mask_pixel_um = dapi_pixel_um * (full_dim / mask_dim).
+    Downsamples so the longer axis is at most _MASK_MAX_DIM px.
+    Returns (mask, step) where step = full_dim / mask_dim (integer downsampling factor).
+    The caller passes mask_pixel_um = dapi_pixel_um * step.
     """
     tf = tifffile.TiffFile(dapi_path)
     s = tf.series[0]
@@ -44,7 +48,7 @@ def tissue_mask_from_dapi(dapi_path, level=4, thresh_frac=0.02):
     arr = za if hasattr(za, "shape") else za["0"]
     # DAPI may be (C, Y, X); take channel 0
     full_h = arr.shape[-2]
-    step = max(1, full_h // 4000)
+    step = max(1, full_h // _MASK_MAX_DIM)
     img = np.asarray(arr[0, ::step, ::step]) if arr.ndim == 3 else np.asarray(arr[::step, ::step])
     thr = np.percentile(img, 100 * (1 - thresh_frac))
     mask = img > max(1, thr * 0.15)
@@ -69,7 +73,11 @@ def load_xenium_cells(cells_path, pixel_um, in_um=True):
     return out
 
 
-def he_pixel_um(he_path, fallback=0.2628):
+# Fallback H&E um/pixel (Aperio 20x standard; override via config["he_pixel_um"]).
+HE_FALLBACK_MPP = 0.2628
+
+
+def he_pixel_um(he_path, fallback=HE_FALLBACK_MPP):
     """Read the H&E microns-per-pixel (Aperio 'MPP' tag); fallback if not present."""
     import re
     try:

@@ -26,14 +26,15 @@ def main():
     s = config.get_sample(config.load_samples(a.samples), a.sample)
     out = os.path.join(cfg["output_dir"], a.sample)
     um = cfg["pixel_um"]
-    qc = json.load(open(os.path.join(out, "qc.json")))
+    with open(os.path.join(out, "qc.json")) as _f:
+        qc = json.load(_f)
     if qc["decision"]["chosen"] != "coarse":
         print(f"[{a.sample}] not coarse-flagged; nothing to rescue"); return
     coarse_r = qc["decision"]["sel_density_r"]
 
     xen = xenium.load_xenium_nuclei(s["xenium_cells"], um, in_um=cfg["centroids_in_um"])
     he_src = np.load(os.path.join(out, "he_nuclei.npy")).astype(float)
-    scale = xenium.he_pixel_um(s["he_path"], cfg.get("he_pixel_um") or 0.2628) / um
+    scale = xenium.he_pixel_um(s["he_path"], cfg.get("he_pixel_um") or xenium.HE_FALLBACK_MPP) / um
 
     import pyvips
     W, H = (lambda im: (im.width, im.height))(pyvips.Image.new_from_file(s["he_path"], access="sequential"))
@@ -54,7 +55,8 @@ def main():
                           "sel_median_um": round(m["nucleus_coincidence"]["median_um"], 3),
                           "sel_density_r": round(m["density_r"], 3),
                           "prerotate_deg": rot}
-        json.dump(qc, open(os.path.join(out, "qc.json"), "w"), indent=2)
+        with open(os.path.join(out, "qc.json"), "w") as _f:
+            json.dump(qc, _f, indent=2)
         if a.warp_image:
             registration.warp_image(reg, os.path.join(out, "registered"), level=0, non_rigid=True)
             print(f"[{a.sample}] rescued WSI written", flush=True)

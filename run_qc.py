@@ -17,6 +17,18 @@ from hest_valis import config, concordance, select, xenium, coarse_align
 COARSE_TRIGGER = 0.10  # if the selected density-r is below this, try the coarse fallback
 
 
+def _sanitize(obj):
+    """Recursively coerce NaN/inf to None so the dict is JSON-serialisable."""
+    import math
+    if isinstance(obj, float):
+        return None if not math.isfinite(obj) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--samples", required=True)
@@ -51,7 +63,7 @@ def main():
     sel_r = decision["sel_density_r"]
     if (not a.no_coarse_fallback and sel_r is not None and sel_r < COARSE_TRIGGER
             and os.path.exists(os.path.join(out, "he_nuclei.npy"))):
-        scale = xenium.he_pixel_um(s["he_path"], cfg.get("he_pixel_um") or 0.2628) / um
+        scale = xenium.he_pixel_um(s["he_path"], cfg.get("he_pixel_um") or xenium.HE_FALLBACK_MPP) / um
         he_src = np.load(os.path.join(out, "he_nuclei.npy")).astype(float)
         aligned, params, _ = coarse_align.coarse_align(he_src, xen, scale, dapi_um=um)
         mc = qc(aligned)
@@ -64,8 +76,9 @@ def main():
                         "sel_median_um": round(mc["nucleus_coincidence"]["median_um"], 3),
                         "sel_density_r": round(mc["density_r"], 3)}
 
-    json.dump({"sample_id": a.sample, "metrics": metrics, "decision": decision},
-              open(os.path.join(out, "qc.json"), "w"), indent=2)
+    payload = _sanitize({"sample_id": a.sample, "metrics": metrics, "decision": decision})
+    with open(os.path.join(out, "qc.json"), "w") as _f:
+        json.dump(payload, _f, indent=2)
     d = decision
     print(f"[{a.sample}] chosen={d['chosen']} ({d['rule']}) "
           f"median={d['sel_median_um']}um density_r={d['sel_density_r']}", flush=True)

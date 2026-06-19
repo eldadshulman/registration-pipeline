@@ -31,7 +31,8 @@ def main():
 
     micro = a.micro
     if micro < 0:
-        chosen = json.load(open(os.path.join(out, "qc.json")))["decision"]["chosen"]
+        with open(os.path.join(out, "qc.json")) as _f:
+            chosen = json.load(_f)["decision"]["chosen"]
         if chosen == "coarse":
             print(f"[{a.sample}] chosen=coarse (rescued from a failed registration). The image "
                   f"warp needs the H&E pre-rotated by the coarse params then re-registered; "

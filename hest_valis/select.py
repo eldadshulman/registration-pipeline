@@ -47,7 +47,13 @@ def choose(micro, nomicro):
 
 
 def _md(m):
-    return m["nucleus_coincidence"]["median_um"], m["density_r"]
+    med = m["nucleus_coincidence"]["median_um"]
+    r = m["density_r"]
+    # treat NaN density_r as -1 so slides with failed density correlation don't win on that metric
+    import math
+    if r is None or (isinstance(r, float) and not math.isfinite(r)):
+        r = -1.0
+    return med, r
 
 
 def _pack(chosen, rule, m):

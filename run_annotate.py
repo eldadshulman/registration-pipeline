@@ -17,11 +17,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from hest_valis import config, annotate, xenium
 
-COL = {"tumor": "#c0392b", "stroma": "#2c7fb8", "background": "#dddddd"}
+COL = {"high_density": "#c0392b", "low_density": "#2c7fb8", "background": "#dddddd"}
 
 
 def chosen_nuclei_path(out):
-    chosen = json.load(open(os.path.join(out, "qc.json")))["decision"]["chosen"]
+    with open(os.path.join(out, "qc.json")) as _f:
+        chosen = json.load(_f)["decision"]["chosen"]
     name = {"micro": "he_nuclei_micro.npy", "nomicro": "he_nuclei_nomicro.npy",
             "coarse": "he_nuclei_coarse.npy"}[chosen]
     return os.path.join(out, name), chosen
@@ -53,11 +54,11 @@ def main():
         rgb[region == k] = tuple(int(c[i:i + 2], 16) / 255 for i in (1, 3, 5))
     fig, ax = plt.subplots(figsize=(4, 5))
     ax.imshow(rgb, origin="upper"); ax.set_xticks([]); ax.set_yticks([])
-    ax.set_title(f"{a.sample} ({chosen})\n{vc.get('tumor',0):,} tumor / {vc.get('stroma',0):,} stroma cells", fontsize=10)
+    ax.set_title(f"{a.sample} ({chosen})\n{vc.get('high_density',0):,} high_density / {vc.get('low_density',0):,} low_density cells", fontsize=10)
     fig.savefig(os.path.join(out, "region_overlay.png"), dpi=110, bbox_inches="tight", facecolor="white")
     plt.close()
     print(f"[{a.sample}] {len(labels):,} cells labeled ({chosen}) -> "
-          f"tumor {vc.get('tumor',0):,} stroma {vc.get('stroma',0):,} background {vc.get('background',0):,}", flush=True)
+          f"high_density {vc.get('high_density',0):,} low_density {vc.get('low_density',0):,} background {vc.get('background',0):,}", flush=True)
 
 
 if __name__ == "__main__":

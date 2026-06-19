@@ -15,7 +15,11 @@ import pandas as pd
 from scipy.ndimage import binary_closing
 from sklearn.mixture import GaussianMixture
 
-REGIONS = ("tumor", "stroma", "background")
+# NOTE: labels are density-based (H&E nuclear density GMM), not pathologist-validated.
+# High-density tissue bins are labelled "high_density" (often but not always tumour);
+# low-density bins are "low_density" (often stroma). Replace with a real mask lookup
+# when pathologist annotations are available.
+REGIONS = ("high_density", "low_density", "background")
 
 
 def region_map(he_px, pixel_um, nbx, nby, bin_um=50.0):
@@ -31,7 +35,7 @@ def region_map(he_px, pixel_um, nbx, nby, bin_um=50.0):
         lab = gm.predict(v)
         tumor = int(np.argmax(gm.means_.ravel()))
         ti = np.argwhere(tissue)
-        region[ti[:, 0], ti[:, 1]] = np.where(lab == tumor, "tumor", "stroma")
+        region[ti[:, 0], ti[:, 1]] = np.where(lab == tumor, "high_density", "low_density")
     return region, dens
 
 
