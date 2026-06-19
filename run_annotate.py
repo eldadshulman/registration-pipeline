@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """Per-cell annotation transfer: tag each Xenium cell with its registered-H&E region.
 
-Uses the chosen-protocol warped nuclei (from run_register / the coarse fallback) to build a
-tumor/stroma/background region map and assign every Xenium cell its region.
+Uses the chosen-protocol warped nuclei (from run_register / the coarse fallback / a rescue) to
+build a high_density / low_density / background region map and assign every Xenium cell its
+region. Labels are density-based, not pathologist-validated (see hest_valis/annotate.py).
 Writes <out>/<sample>/cell_labels.parquet (cell_id, x_um, y_um, he_region) + a region overlay.
 Run in an env with numpy/scipy/pandas/scikit-learn/matplotlib.
   python run_annotate.py --samples samples.csv --config config.json --sample <id>
@@ -23,9 +24,12 @@ COL = {"high_density": "#c0392b", "low_density": "#2c7fb8", "background": "#dddd
 def chosen_nuclei_path(out):
     with open(os.path.join(out, "qc.json")) as _f:
         chosen = json.load(_f)["decision"]["chosen"]
-    name = {"micro": "he_nuclei_micro.npy", "nomicro": "he_nuclei_nomicro.npy",
-            "coarse": "he_nuclei_coarse.npy"}[chosen]
-    return os.path.join(out, name), chosen
+    names = {"micro": "he_nuclei_micro.npy", "nomicro": "he_nuclei_nomicro.npy",
+             "coarse": "he_nuclei_coarse.npy", "rescued": "he_nuclei_rescued.npy"}
+    if chosen not in names:
+        raise ValueError(f"qc.json has unknown chosen protocol {chosen!r}; "
+                         f"expected one of {sorted(names)}")
+    return os.path.join(out, names[chosen]), chosen
 
 
 def main():

@@ -1,14 +1,15 @@
 """Per-cell annotation transfer: tag each Xenium cell with its H&E region.
 
-After registration, build a morphological region map from the registered H&E (tumor / stroma /
-background) and assign every Xenium cell the region it falls in. This mirrors annotation-transfer
-pipelines that overlap each cell with an aligned mask, but the mask here is derived from H&E
-morphology rather than a hand-drawn pathology annotation.
+After registration, build a morphological region map from the registered H&E
+(high_density / low_density / background) and assign every Xenium cell the region it falls in.
+This mirrors annotation-transfer pipelines that overlap each cell with an aligned mask, but the
+mask here is derived from H&E morphology rather than a hand-drawn pathology annotation.
 
 Region map: per `bin_um` bin, the registered H&E nuclear density. A 2-component GMM splits tissue
-bins into the higher-density cluster ('tumor') and the lower ('stroma'); empty bins are
-'background'. When real pathologist masks become available, replace region_map() with a lookup
-into that mask; assign_cells() stays the same.
+bins into the higher-density cluster ('high_density', often but not always tumour) and the lower
+('low_density', often stroma); empty bins are 'background'. These are density-based, NOT
+pathologist-validated (see the REGIONS note below). When real pathologist masks become available,
+replace region_map() with a lookup into that mask; assign_cells() stays the same.
 """
 import numpy as np
 import pandas as pd

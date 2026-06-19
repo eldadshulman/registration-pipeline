@@ -8,6 +8,7 @@ import argparse
 import csv
 import json
 import os
+from collections import Counter
 from hest_valis import config
 
 
@@ -46,7 +47,10 @@ def main():
             "nomicro_r": g(M, "nomicro", "density_r"),
             "chosen": d["chosen"], "rule": d["rule"],
             "sel_median_um": d["sel_median_um"], "sel_density_r": d["sel_density_r"]})
-        manifest.append({"sample_id": sid, "micro": 1 if d["chosen"] == "micro" else 0})
+        # coarse/rescued slides are NOT plain micro/no-micro warps; they must go through
+        # run_rescue.py --warp-image, so keep them out of the wsi_manifest (which feeds run_wsi).
+        if d["chosen"] in ("micro", "nomicro"):
+            manifest.append({"sample_id": sid, "micro": 1 if d["chosen"] == "micro" else 0})
 
     cols = ["sample_id", "status", "micro_med", "micro_r", "nomicro_med", "nomicro_r",
             "chosen", "rule", "sel_median_um", "sel_density_r"]
@@ -56,9 +60,12 @@ def main():
         w = csv.DictWriter(f, fieldnames=["sample_id", "micro"]); w.writeheader(); w.writerows(manifest)
 
     ok = [r for r in rows if r["status"] == "ok"]
-    nmic = sum(1 for r in ok if r["chosen"] == "micro")
-    print(f"decided {len(ok)}/{len(rows)} | {nmic} micro / {len(ok)-nmic} no-micro "
-          f"-> {od}/per_slide_decision.csv, wsi_manifest.csv")
+    counts = Counter(r["chosen"] for r in ok)
+    breakdown = ", ".join(f"{counts[k]} {k}" for k in ("micro", "nomicro", "coarse", "rescued")
+                          if counts.get(k))
+    print(f"decided {len(ok)}/{len(rows)} | {breakdown} -> {od}/per_slide_decision.csv, "
+          f"wsi_manifest.csv ({len(manifest)} slides; coarse/rescued excluded -> "
+          f"warp via run_rescue.py --warp-image)")
 
 
 if __name__ == "__main__":

@@ -33,10 +33,11 @@ def main():
     if micro < 0:
         with open(os.path.join(out, "qc.json")) as _f:
             chosen = json.load(_f)["decision"]["chosen"]
-        if chosen == "coarse":
-            print(f"[{a.sample}] chosen=coarse (rescued from a failed registration). The image "
-                  f"warp needs the H&E pre-rotated by the coarse params then re-registered; "
-                  f"skipping automatic warp. See README 'Self-healing'.", flush=True)
+        if chosen in ("coarse", "rescued"):
+            print(f"[{a.sample}] chosen={chosen}: this slide was rescued from a failed "
+                  f"registration, so warping the ORIGINAL H&E here would be wrong. Generate its "
+                  f"WSI with `run_rescue.py ... --warp-image` (uses the pre-rotated H&E). "
+                  f"Skipping run_wsi. See README 'Self-healing'.", flush=True)
             return
         micro = 1 if chosen == "micro" else 0
 
