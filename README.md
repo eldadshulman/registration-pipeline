@@ -130,4 +130,18 @@ examples/          config.json + samples.csv templates
   do this). To get both QC variants cheaply, `run_register.py` warps nuclei before and after
   `register_micro` from one registration.
 - **Pixel size** -> set `pixel_um` to your DAPI um/pixel (Xenium is 0.2125).
-```
+
+## Credits
+
+This pipeline stands on two pieces of work and would not exist without them:
+
+- **VALIS** -- the whole-slide image registration engine used here.
+  Gatenbee et al., "Virtual Alignment of pathoLogy Image Series for multi-gene analysis,"
+  *Nature Communications* (2023). https://github.com/MathOnco/valis
+- **HEST / Mahmood Lab** -- the `register_dapi_he` recipe and the HEST-1k spatial
+  transcriptomics + histology resource that this registration approach is based on.
+  Jaume et al., "HEST-1k: A Dataset for Spatial Transcriptomics and Histology Image Analysis,"
+  *NeurIPS* (2024). Mahmood Lab, https://github.com/mahmoodlab/HEST
+
+Nuclei are detected with **StarDist** (Schmidt et al., MICCAI 2018). Please cite VALIS, HEST,
+and StarDist if you use this pipeline.
