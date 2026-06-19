@@ -146,9 +146,20 @@ failed registration it is selected (`rule = coarse_rescue_negative_density_r`) a
 `he_nuclei_coarse.npy`. In testing this turned a real 270-degree-rotated slide from density-r
 -0.13 into +0.76 with zero manual input. Disable with `--no-coarse-fallback`.
 
-Note: the coarse fallback fixes the nuclei and the QC/annotation. To also warp the *image* for a
-rescued slide, pre-rotate the H&E by the recovered params and re-register (the automatic image
-warp skips coarse-rescued slides rather than emit a wrong WSI).
+The coarse fallback fixes the nuclei, QC and annotation. To turn that into a FULL registration
+(proper micro / no-micro + a warpable image), `run_rescue.py` finishes the job automatically: it
+picks the cardinal rotation (`coarse_align.cardinal_rotation`), losslessly pre-rotates the H&E
+(`registration.prerotate_he`), re-registers with VALIS + micro, re-QCs, and -- if it beats the
+coarse density-r -- adopts it (`rule = prerotate_reregister`). Add `--warp-image` to also emit
+the rescued WSI.
+
+```bash
+python run_rescue.py --samples samples.csv --config config.json --sample SLIDE_A --warp-image
+```
+
+So a grossly mis-oriented slide goes: failed VALIS (negative density-r) -> auto coarse rescue
+(QC + annotations usable) -> optional `run_rescue` (full re-registration + WSI), with no manual
+landmark clicking.
 
 ## Layout
 
@@ -158,6 +169,7 @@ run_segment.py     step 1  (StarDist env)   H&E nuclei
 run_register.py    step 2  (valis env)      register + warp nuclei, both protocols
 run_qc.py          step 3  (QC env)         metrics + per-slide selection + coarse fallback
 run_annotate.py            (QC env)         per-cell annotation transfer
+run_rescue.py              (valis env)      pre-rotate + re-register a coarse-flagged slide
 run_wsi.py                 (valis env)      warp the chosen H&E image -> OME-TIFF
 run_select.py      aggregate decisions -> decision table + WSI manifest
 slurm/             SLURM array wrappers

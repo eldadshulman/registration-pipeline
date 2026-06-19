@@ -99,6 +99,17 @@ def warp_image(reg, out_dir, level=0, non_rigid=True, compression="deflate"):
     return out_dir
 
 
+def prerotate_he(he_path, rotation, out_path):
+    """Losslessly rotate the H&E by a cardinal angle (0/90/180/270 clockwise) with pyvips and
+    save a tiled pyramidal TIFF. Used to seed registration for a grossly mis-oriented slide
+    (see coarse_align.cardinal_rotation). Returns (out_path, (width, height))."""
+    import pyvips
+    img = pyvips.Image.new_from_file(he_path, access="sequential")
+    img = {0: img, 90: img.rot90(), 180: img.rot180(), 270: img.rot270()}[rotation]
+    img.tiffsave(out_path, tile=True, pyramid=True, compression="jpeg", Q=92, bigtiff=True)
+    return out_path, (img.width, img.height)
+
+
 def shutdown():
     try:
         registration.kill_jvm()

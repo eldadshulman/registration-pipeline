@@ -69,3 +69,41 @@ def coarse_align(he_src_px, xen_px, scale, dapi_um=0.2125, bin_um=40.0, angle_st
     R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
     aligned = (h @ R.T) + np.array([dx, dy]) + xen_px.mean(0)
     return aligned, {"angle": ang, "flip": flip, "dx": float(dx), "dy": float(dy)}, r
+
+
+def rotate_points(p, rotation, W, H):
+    """Map H&E nuclei through a cardinal image rotation (pyvips clockwise convention)."""
+    x, y = p[:, 0], p[:, 1]
+    return {0: np.c_[x, y], 90: np.c_[H - 1 - y, x],
+            180: np.c_[W - 1 - x, H - 1 - y], 270: np.c_[y, W - 1 - x]}[rotation]
+
+
+def _translate_r(P, xen_px, dapi_um, bin_um):
+    B = bin_um / dapi_um
+    allp = np.vstack([P - P.mean(0), xen_px - xen_px.mean(0)])
+    ext = np.abs(allp).max() * 1.15
+    nb = int(2 * ext / B) + 1
+    Bx = _grid(xen_px - xen_px.mean(0), ext, nb)
+    cps = fft2(Bx) * np.conj(fft2(_grid(P - P.mean(0), ext, nb)))
+    cps /= np.abs(cps) + 1e-9
+    cc = np.abs(ifft2(cps))
+    pk = np.unravel_index(np.argmax(cc), cc.shape)
+    sy = pk[0] - (nb if pk[0] > nb // 2 else 0)
+    sx = pk[1] - (nb if pk[1] > nb // 2 else 0)
+    gh = _grid((P - P.mean(0)) + np.array([sx * B, sy * B]), ext, nb)
+    m = (gh > 0) & ((gh + Bx) > 0)
+    return float(np.corrcoef(gh[m], Bx[m])[0, 1]) if m.sum() > 10 else -1.0
+
+
+def cardinal_rotation(he_src_px, xen_px, scale, he_wh, dapi_um=0.2125, bin_um=40.0):
+    """Pick the cardinal rotation (0/90/180/270, pyvips clockwise) of the H&E that best matches
+    the Xenium nuclei. Use this for a LOSSLESS pyvips rotation before re-registering a rescued
+    slide. Returns (rotation_degrees, density_r).
+    """
+    W, H = he_wh
+    best = (-2.0, 0)
+    for r in (0, 90, 180, 270):
+        rr = _translate_r(rotate_points(he_src_px, r, W, H) * scale, xen_px, dapi_um, bin_um)
+        if rr > best[0]:
+            best = (rr, r)
+    return best[1], best[0]
