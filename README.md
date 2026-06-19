@@ -21,10 +21,16 @@ report**, so every transcript / cell can be placed on the right piece of tissue.
 4. **Select** micro vs no-micro **per slide** by a simple rule, so the cohort is a mix.
 5. **Warp the full H&E image** with the chosen setting into the Xenium frame -> registered
    OME-TIFF.
+6. **Transfer per-cell annotations**: derive an H&E region map (tumor / stroma / background)
+   and tag every Xenium cell with the region it falls in.
+
+If a slide comes back with a **negative density-r** (a gross mis-orientation that VALIS could
+not recover), a **coarse rotation/flip search runs automatically as a fallback** and rescues
+it (see Self-healing below).
 
 Direction matters: DAPI is fixed and the **H&E moves onto it**, so all outputs share the
-Xenium coordinate system. (Some pipelines do the reverse and only transfer annotations onto
-cells; this one produces a real registered H&E image.)
+Xenium coordinate system. This pipeline produces both a real registered H&E image *and*
+per-cell annotations.
 
 ## The four QC checks
 
@@ -81,8 +87,11 @@ sbatch --array=0-$(( $(tail -n +2 output/wsi_manifest.csv | wc -l) - 1 )) slurm/
 he_nuclei.npy              StarDist H&E nuclei (H&E pixels)
 he_nuclei_nomicro.npy      H&E nuclei warped into the Xenium frame (no micro)
 he_nuclei_micro.npy        ... with micro refinement (absent if micro failed)
-qc.json                    both variants' metrics + the chosen protocol + the rule fired
+he_nuclei_coarse.npy       ... coarse-fallback alignment (only if a rescue was needed)
+qc.json                    all variants' metrics + the chosen protocol + the rule fired
 registered/aligned_fullres_HE.ome.tiff   the warped H&E in the Xenium frame
+cell_labels.parquet        per-cell annotation: cell_id, x_um, y_um, he_region
+region_overlay.png         tumor/stroma/background region map (QC)
 ```
 Cohort level (under `output/`): `per_slide_decision.csv`, `wsi_manifest.csv`.
 
@@ -105,13 +114,50 @@ warped = registration.warp_points(reg, segment.segment_he(he))   # nuclei -> Xen
 m = concordance.compute_qc(warped, xenium.load_xenium_nuclei(cells, 0.2125), 0.2125)
 ```
 
+## Per-cell annotation transfer (`run_annotate.py`)
+
+After registration, tag every Xenium cell with its H&E region. A region map (tumor / stroma /
+background) is built from the registered-H&E nuclear density (2-component GMM: the higher-density
+tissue cluster is tumor, the lower is stroma, empty bins are background), then each Xenium cell is
+assigned the region it falls in.
+
+```bash
+python run_annotate.py --samples samples.csv --config config.json --sample SLIDE_A
+# -> output/SLIDE_A/cell_labels.parquet   (cell_id, x_um, y_um, he_region)
+#    output/SLIDE_A/region_overlay.png
+```
+
+This is the same idea as annotation-transfer pipelines that overlap each cell with an aligned
+mask, except the mask is derived from H&E morphology. **When real pathologist masks are
+available**, replace `annotate.region_map()` with a lookup into that mask; `assign_cells()` is
+unchanged, and you get pathologist-grade per-cell labels.
+
+## Self-healing: coarse-alignment fallback
+
+VALIS feature matching can lock onto a wrong solution when the H&E is grossly mis-oriented
+(e.g. a 90/180/270-degree rotation or a mirror). The slide then returns a **negative density-r**:
+locally nothing coincides even though the footprints roughly overlap. No rigid / non-rigid /
+reflection inside VALIS fixes it, because the starting orientation is wrong.
+
+`run_qc.py` detects this (selected density-r below `COARSE_TRIGGER`, default 0.10) and runs
+`coarse_align` automatically: it searches rotation x flip and, for each, finds the best
+translation by FFT phase correlation, scoring by nuclei-density agreement. If it beats the
+failed registration it is selected (`rule = coarse_rescue_negative_density_r`) and saved as
+`he_nuclei_coarse.npy`. In testing this turned a real 270-degree-rotated slide from density-r
+-0.13 into +0.76 with zero manual input. Disable with `--no-coarse-fallback`.
+
+Note: the coarse fallback fixes the nuclei and the QC/annotation. To also warp the *image* for a
+rescued slide, pre-rotate the H&E by the recovered params and re-register (the automatic image
+warp skips coarse-rescued slides rather than emit a wrong WSI).
+
 ## Layout
 
 ```
-hest_valis/        registration, segment, concordance, select, xenium, config
+hest_valis/        registration, segment, concordance, select, coarse_align, annotate, xenium, config
 run_segment.py     step 1  (StarDist env)   H&E nuclei
 run_register.py    step 2  (valis env)      register + warp nuclei, both protocols
-run_qc.py          step 3  (QC env)         metrics + per-slide selection
+run_qc.py          step 3  (QC env)         metrics + per-slide selection + coarse fallback
+run_annotate.py            (QC env)         per-cell annotation transfer
 run_wsi.py                 (valis env)      warp the chosen H&E image -> OME-TIFF
 run_select.py      aggregate decisions -> decision table + WSI manifest
 slurm/             SLURM array wrappers

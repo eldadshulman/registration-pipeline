@@ -31,7 +31,13 @@ def main():
 
     micro = a.micro
     if micro < 0:
-        micro = 1 if json.load(open(os.path.join(out, "qc.json")))["decision"]["chosen"] == "micro" else 0
+        chosen = json.load(open(os.path.join(out, "qc.json")))["decision"]["chosen"]
+        if chosen == "coarse":
+            print(f"[{a.sample}] chosen=coarse (rescued from a failed registration). The image "
+                  f"warp needs the H&E pre-rotated by the coarse params then re-registered; "
+                  f"skipping automatic warp. See README 'Self-healing'.", flush=True)
+            return
+        micro = 1 if chosen == "micro" else 0
 
     reg = registration.register_slide(s["he_path"], s["dapi_path"], out, micro=bool(micro))
     registration.warp_image(reg, reg_out, level=0, non_rigid=True)

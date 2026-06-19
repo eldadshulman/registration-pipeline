@@ -49,3 +49,35 @@ def tissue_mask_from_dapi(dapi_path, level=4, thresh_frac=0.02):
     thr = np.percentile(img, 100 * (1 - thresh_frac))
     mask = img > max(1, thr * 0.15)
     return mask, step
+
+
+def load_xenium_cells(cells_path, pixel_um, in_um=True):
+    """Load Xenium cells as a DataFrame for annotation transfer.
+
+    Returns columns: cell_id, x_um, y_um, x_px, y_px (DAPI pixel frame).
+    """
+    df = pd.read_parquet(cells_path)
+    xc = next(c for c in _X_COLS if c in df.columns)
+    yc = next(c for c in _Y_COLS if c in df.columns)
+    cid = next((c for c in ("cell_id", "cell", "id") if c in df.columns), None)
+    x = df[xc].to_numpy(float)
+    y = df[yc].to_numpy(float)
+    x_um, y_um = (x, y) if in_um else (x * pixel_um, y * pixel_um)
+    x_px, y_px = (x / pixel_um, y / pixel_um) if in_um else (x, y)
+    out = pd.DataFrame({"x_um": x_um, "y_um": y_um, "x_px": x_px, "y_px": y_px})
+    out.insert(0, "cell_id", df[cid].to_numpy() if cid else np.arange(len(df)))
+    return out
+
+
+def he_pixel_um(he_path, fallback=0.2628):
+    """Read the H&E microns-per-pixel (Aperio 'MPP' tag); fallback if not present."""
+    import re
+    try:
+        with tifffile.TiffFile(he_path) as tf:
+            desc = tf.pages[0].description or ""
+        m = re.search(r"MPP\s*=\s*([0-9.]+)", desc)
+        if m:
+            return float(m.group(1))
+    except Exception:
+        pass
+    return fallback

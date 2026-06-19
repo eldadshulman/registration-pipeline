@@ -5,8 +5,11 @@ Modules
   segment      : StarDist nuclei on H&E
   concordance  : QC metrics (coincidence, density-r, occupancy, negative control)
   select       : per-slide micro vs no-micro decision rule
-  xenium       : load Xenium nuclei into the DAPI frame, tissue mask
+  coarse_align : self-healing fallback for a failed (negative density-r) registration
+  annotate     : per-cell annotation transfer (tag each Xenium cell with its H&E region)
+  xenium       : load Xenium nuclei/cells into the DAPI frame, tissue mask, H&E pixel size
   config       : load samples.csv + config.json
 """
-__all__ = ["registration", "segment", "concordance", "select", "xenium", "config"]
+__all__ = ["registration", "segment", "concordance", "select", "coarse_align",
+           "annotate", "xenium", "config"]
 __version__ = "1.0"
