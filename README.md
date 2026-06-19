@@ -181,6 +181,14 @@ So a grossly mis-oriented slide goes: failed VALIS (negative density-r) -> auto 
 (QC + annotations usable) -> optional `run_rescue` (full re-registration + WSI), with no manual
 landmark clicking.
 
+**Known limitation -- `run_rescue` handles cardinal ROTATIONS only (0/90/180/270).** The lossless
+pre-rotation (`registration.prerotate_he`, pyvips rot90/180/270) cannot express a mirror, and the
+re-register step does not flip. So a slide whose mis-orientation is (or includes) a **flip** is
+still *QC-rescued* -- `coarse_align` does search flips, so its `he_nuclei_coarse` and the per-cell
+annotations are correct -- but `run_rescue` will not beat the coarse density-r, so it keeps
+`chosen=coarse` and does **not** emit a registered image for that slide. Flipped slides therefore
+get QC + annotations but no warped WSI; handle those manually (or with a flip-capable warp).
+
 ## Layout
 
 ```
