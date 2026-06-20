@@ -86,6 +86,10 @@ sbatch --array=0-$(( $(tail -n +2 output/wsi_manifest.csv | wc -l) - 1 )) slurm/
 # 4) per-slide + cohort alignment QC report (CPU-only plotting; no re-registration)
 sbatch --array=0-$(( $(tail -n +2 samples.csv | wc -l) - 1 )) slurm/report_array.sbatch
 #    -> output/<sample>/report.pdf  and  output/cohort_report.pdf (the triage page)
+
+# 5) acceptance gate + move/audit table (same qc.json + thresholds as the cohort report)
+python run_provenance.py --samples samples.csv --config config.json
+#    -> output/provenance.csv  (accepted vs manual-review, per-slide audit)
 ```
 
 `samples.csv` columns:
@@ -96,6 +100,7 @@ sbatch --array=0-$(( $(tail -n +2 samples.csv | wc -l) - 1 )) slurm/report_array
 | `he_path` | H&E whole-slide image (`.svs` / `.ome.tiff`), the moving image |
 | `dapi_path` | Xenium DAPI image, the fixed reference. Raw 10x output is `morphology_focus/morphology_focus_0000.ome.tif` (channel 0 = DAPI); HEST renames it to `morphology_focus/ch0000_dapi.ome.tif`. Point at whichever you have. |
 | `xenium_cells` | Xenium [`cells.parquet`](https://www.10xgenomics.com/support/software/xenium-onboard-analysis/latest/analysis/xoa-output-understanding-outputs) (cell centroids in microns) for QC |
+| `batch` *(optional)* | scanner-run key; `run_provenance.py` uses it for per-batch orientation-consistency checks. Absent -> all slides share batch `UNKNOWN`. |
 
 ## Outputs (under `output/<sample_id>/`)
 
@@ -110,7 +115,43 @@ cell_labels.parquet        per-cell annotation: cell_id, x_um, y_um, he_region
 region_overlay.png         tumor/stroma/background region map (QC)
 report.pdf                 one-page alignment QC report (+ report.png for the review notebook)
 ```
-Cohort level (under `output/`): `per_slide_decision.csv`, `wsi_manifest.csv`, `cohort_report.pdf`.
+Cohort level (under `output/`): `per_slide_decision.csv`, `wsi_manifest.csv`, `cohort_report.pdf`,
+`provenance.csv`.
+
+## One triage source: thresholds + provenance
+
+The cohort report (`cohort_report.pdf`) and the provenance/move table (`provenance.csv`) read the
+**same `qc.json`** and gate on the **same thresholds**, so they can never tell you different things
+about the same slide.
+
+- **One schema.** Every slide's outcome lives in `qc.json` (`decision.chosen` +
+  `decision.sel_density_r` / `sel_median_um`, with the chosen metric under `metrics[<chosen>]`).
+  A rescue is not a separate file: `run_rescue.py` writes `decision.chosen="rescued"` and
+  `metrics["rescued"]` in the `compute_qc` shape, so the report and the provenance pick up rescued
+  slides for free.
+- **One set of thresholds** (in `config.json`, the single source -- `hest_valis/config.py`):
+
+  | key | used by | meaning |
+  |-----|---------|---------|
+  | `density_r_accept` | report cohort line **and** provenance gate | accept if `density_r >= this` |
+  | `median_um_accept` | report cohort line **and** provenance gate | accept if median offset `<= this` (um) |
+  | `rescue_trigger_r` | `run_qc.py` | selected `density_r` below this -> attempt the coarse/orient rescue |
+  | `rescue_delta_min` | provenance | a rescued slide whose `density_r` jump is below this is flagged for eyes |
+
+  The report's cohort "good" line is literally `density_r_accept` / `median_um_accept`, the same
+  numbers `provenance.gate()` accepts on -- change them in one place and both move together.
+
+```bash
+# acceptance gate + audit/move table (CPU; same qc.json + thresholds as the cohort report)
+python run_provenance.py --samples samples.csv --config config.json
+#    -> output/provenance.csv  + a printed triage summary (accepted vs manual-review)
+```
+
+`provenance.csv` is one row per slide: the gate result (`accepted`), the as-is-vs-rescued audit
+(`pre_r/post_r`, `delta_r`, recovered orientation), `reason`, per-batch `orientation_outlier`
+(needs an optional `batch` column in `samples.csv`), `small_delta_flag`, and the chosen artifacts
+(`chosen_nuclei`, `registered_wsi`). A slide that fails the gate is flagged `manual`, never
+auto-accepted.
 
 ## Optional flags (`run_qc.py`)
 
@@ -234,6 +275,15 @@ annotations are correct -- but `run_rescue` will not beat the coarse density-r, 
 `chosen=coarse` and does **not** emit a registered image for that slide. Flipped slides therefore
 get QC + annotations but no warped WSI; handle those manually (or with a flip-capable warp).
 
+> **Planned: flip-capable orientation rescue.** A cohort whose H&E is scanned 90-deg-rotated AND
+> mirrored vs the DAPI (seen in TNBC) needs the lossless pre-orientation to include a `pyvips`
+> `fliphor`, and the orientation should be picked by **nucleus-coincidence median_um** rather than
+> density-r (density-r is nearly mirror-insensitive, so a wrong flip can score high while every
+> cell lands mirror-imaged). When that lands it must keep the single triage schema: write the
+> outcome into `qc.json` (`chosen="rescued"`, `metrics["rescued"]`, `decision.sel_*`, plus
+> `decision.prerotate_flip`), not a separate metrics file -- the report and `provenance.py` then
+> pick it up unchanged.
+
 ## Layout
 
 ```
@@ -245,6 +295,7 @@ run_annotate.py            (QC env)         per-cell annotation transfer
 run_rescue.py              (valis env)      pre-rotate + re-register a coarse-flagged slide
 run_wsi.py                 (valis env)      warp the chosen H&E image -> OME-TIFF
 run_report.py              (QC env, CPU)    per-slide + cohort alignment QC report (PDF)
+run_provenance.py          (QC env, CPU)    acceptance gate + move/audit table (provenance.csv)
 run_select.py      aggregate decisions -> decision table + WSI manifest
 slurm/             SLURM array wrappers (qc / wsi / report)
 notebooks/         review_alignment.ipynb  thin human-scoring viewer over the reports

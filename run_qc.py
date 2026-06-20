@@ -14,7 +14,8 @@ import os
 import numpy as np
 from hest_valis import config, concordance, select, xenium, coarse_align
 
-COARSE_TRIGGER = 0.10  # if the selected density-r is below this, try the coarse fallback
+COARSE_TRIGGER = 0.10  # default if the selected density-r is below this, try the coarse fallback;
+#                        overridable via config["rescue_trigger_r"] (the single threshold source)
 
 
 def _sanitize(obj):
@@ -61,7 +62,8 @@ def main():
 
     # self-healing fallback on a failed registration (negative / near-zero density-r)
     sel_r = decision["sel_density_r"]
-    if (not a.no_coarse_fallback and sel_r is not None and sel_r < COARSE_TRIGGER
+    trigger = cfg.get("rescue_trigger_r", COARSE_TRIGGER)
+    if (not a.no_coarse_fallback and sel_r is not None and sel_r < trigger
             and os.path.exists(os.path.join(out, "he_nuclei.npy"))):
         scale = xenium.he_pixel_um(s["he_path"], cfg.get("he_pixel_um") or xenium.HE_FALLBACK_MPP) / um
         he_src = np.load(os.path.join(out, "he_nuclei.npy")).astype(float)

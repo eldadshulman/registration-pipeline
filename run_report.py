@@ -40,7 +40,10 @@ def main():
         print(f"[{a.sample}] report -> {pdf}", flush=True)
 
     if a.cohort:
-        pdf = report.render_cohort(cfg["output_dir"])
+        th = config.thresholds(cfg)               # same lines provenance.py gates on
+        pdf = report.render_cohort(cfg["output_dir"],
+                                   density_r_qc=th["density_r_accept"],
+                                   median_um_qc=th["median_um_accept"])
         print(f"[cohort] report -> {pdf}", flush=True)
 
 

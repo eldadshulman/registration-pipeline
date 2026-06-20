@@ -16,9 +16,32 @@ DEFAULTS = {
     "output_dir": "./output",    # per-sample work + results land here
     "valis_env": "",             # path to the valis_hest_env (for register/warp jobs)
     "centroids_in_um": True,     # Xenium cells.parquet centroids are microns
+
+    # --- QC / rescue thresholds: the SINGLE source of truth ---------------------------------
+    # The report's cohort triage lines (report.py) AND the provenance acceptance gate
+    # (provenance.py) both read THESE, so "what looks good" and "what's safe to move" can
+    # never drift apart. Override per-cohort in config.json; do not hard-code elsewhere.
+    "density_r_accept": 0.70,    # accept gate / cohort "good" line: density_r must be >= this
+    "median_um_accept": 5.0,     # accept gate / cohort "good" line: median offset (um) <= this
+    "rescue_trigger_r": 0.10,    # selected density_r below this -> attempt the coarse/orient rescue
+    #                              (run_qc COARSE_TRIGGER default; the TNBC cohort used 0.60 because
+    #                               its 90-deg-rotated slides scored ~0.2-0.3, above 0.10)
+    "rescue_delta_min": 0.20,    # rescued slide with (post_r - pre_r) < this -> flag for eyes
 }
 
 REQUIRED_COLS = ["sample_id", "he_path", "dapi_path", "xenium_cells"]
+# samples.csv may also carry an optional `batch` column (scanner-run key); provenance.py uses it
+# for per-batch orientation-consistency checks. Absent -> all slides share batch "UNKNOWN".
+
+
+def thresholds(cfg):
+    """The single QC/rescue threshold set (config overrides, else DEFAULTS).
+
+    Returns a dict: density_r_accept, median_um_accept, rescue_trigger_r, rescue_delta_min.
+    report.py and provenance.py both pull from here so their lines cannot diverge.
+    """
+    return {k: cfg.get(k, DEFAULTS[k]) for k in
+            ("density_r_accept", "median_um_accept", "rescue_trigger_r", "rescue_delta_min")}
 
 
 def load_config(path):

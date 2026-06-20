@@ -9,8 +9,9 @@ Modules
   annotate     : per-cell annotation transfer (tag each Xenium cell with its H&E region)
   xenium       : load Xenium nuclei/cells into the DAPI frame, tissue mask, H&E pixel size
   report       : non-interactive per-slide + cohort alignment QC report (PDF)
-  config       : load samples.csv + config.json
+  provenance   : per-slide acceptance gate + move/audit table from qc.json (shared thresholds)
+  config       : load samples.csv + config.json (incl. the single QC/rescue threshold set)
 """
 __all__ = ["registration", "segment", "concordance", "select", "coarse_align",
-           "annotate", "xenium", "report", "config"]
+           "annotate", "xenium", "report", "provenance", "config"]
 __version__ = "1.0"

@@ -38,15 +38,18 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import numpy as np
 
-from hest_valis import concordance
+from hest_valis import concordance, config
 
 # region colours mirror run_annotate.COL so the report and the overlay agree
 REGION_COL = {"high_density": "#c0392b", "low_density": "#2c7fb8", "background": "#dddddd"}
 # chosen-protocol colours for the cohort triage page
 PROTOCOL_COL = {"micro": "#1b9e77", "nomicro": "#7570b3", "coarse": "#d95f02",
                 "rescued": "#e7298a", None: "#999999"}
-QC_DENSITY_R = 0.5      # soft "good alignment" line on the cohort density-r plot (red flag below 0)
-QC_MEDIAN_UM = 10.0     # one-cell target on the cohort median-um plot
+# Cohort triage lines come from the SINGLE threshold source (config). These are the same numbers
+# provenance.py gates the move on, so "what looks good" and "what's safe to move" cannot diverge.
+# render_cohort() takes config-derived overrides; these defaults mirror config.DEFAULTS.
+QC_DENSITY_R = config.DEFAULTS["density_r_accept"]   # density_r "good" line (red flag below 0)
+QC_MEDIAN_UM = config.DEFAULTS["median_um_accept"]   # median-offset (um) "good" line
 
 _RASTER_MAX_DIM = 1500  # downsample rasters so a panel is cheap to draw
 
@@ -442,17 +445,24 @@ def _bar(ax, rows, key, title, threshold=None, lower_better=False, xlabel=""):
     ax.grid(axis="x", alpha=0.25)
 
 
-def render_cohort(output_dir, out_pdf=None):
-    """Cohort triage page -> <output_dir>/cohort_report.pdf. Returns the path."""
+def render_cohort(output_dir, out_pdf=None, density_r_qc=None, median_um_qc=None):
+    """Cohort triage page -> <output_dir>/cohort_report.pdf. Returns the path.
+
+    density_r_qc / median_um_qc : the cohort "good" lines (the provenance accept gate). Pass the
+    config values (run_report.py does) so the report line and the move gate stay identical;
+    default to config.DEFAULTS via the module constants.
+    """
+    dr_line = QC_DENSITY_R if density_r_qc is None else density_r_qc
+    um_line = QC_MEDIAN_UM if median_um_qc is None else median_um_qc
     rows = collect_cohort(output_dir)
     out_pdf = out_pdf or os.path.join(output_dir, "cohort_report.pdf")
     n = max(1, len(rows))
     fig = plt.figure(figsize=(16, max(4.0, 0.22 * n + 1.5)))
     gs = GridSpec(1, 3, figure=fig, wspace=0.5)
     _bar(fig.add_subplot(gs[0, 0]), rows, "density_r", "density_r (ranked)",
-         threshold=QC_DENSITY_R, xlabel="density_r")
+         threshold=dr_line, xlabel="density_r")
     _bar(fig.add_subplot(gs[0, 1]), rows, "median_um", "median offset (ranked, lower better)",
-         threshold=QC_MEDIAN_UM, lower_better=True, xlabel="um")
+         threshold=um_line, lower_better=True, xlabel="um")
     _bar(fig.add_subplot(gs[0, 2]), rows, "density_collapse",
          "neg-control density collapse", xlabel="density_r drop")
     handles = [plt.Line2D([0], [0], marker="s", ls="", color=c, label=str(k))
