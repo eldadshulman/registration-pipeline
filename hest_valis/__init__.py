@@ -8,8 +8,9 @@ Modules
   coarse_align : self-healing fallback for a failed (negative density-r) registration
   annotate     : per-cell annotation transfer (tag each Xenium cell with its H&E region)
   xenium       : load Xenium nuclei/cells into the DAPI frame, tissue mask, H&E pixel size
+  report       : non-interactive per-slide + cohort alignment QC report (PDF)
   config       : load samples.csv + config.json
 """
 __all__ = ["registration", "segment", "concordance", "select", "coarse_align",
-           "annotate", "xenium", "config"]
+           "annotate", "xenium", "report", "config"]
 __version__ = "1.0"

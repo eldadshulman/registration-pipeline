@@ -82,6 +82,10 @@ python run_select.py --samples samples.csv --config config.json
 
 # 3) warp the chosen-protocol H&E image per slide (slow, CPU; see env/setup.md)
 sbatch --array=0-$(( $(tail -n +2 output/wsi_manifest.csv | wc -l) - 1 )) slurm/wsi_array.sbatch
+
+# 4) per-slide + cohort alignment QC report (CPU-only plotting; no re-registration)
+sbatch --array=0-$(( $(tail -n +2 samples.csv | wc -l) - 1 )) slurm/report_array.sbatch
+#    -> output/<sample>/report.pdf  and  output/cohort_report.pdf (the triage page)
 ```
 
 `samples.csv` columns:
@@ -104,8 +108,9 @@ qc.json                    all variants' metrics + the chosen protocol + the rul
 registered/aligned_fullres_HE.ome.tiff   the warped H&E in the Xenium frame
 cell_labels.parquet        per-cell annotation: cell_id, x_um, y_um, he_region
 region_overlay.png         tumor/stroma/background region map (QC)
+report.pdf                 one-page alignment QC report (+ report.png for the review notebook)
 ```
-Cohort level (under `output/`): `per_slide_decision.csv`, `wsi_manifest.csv`.
+Cohort level (under `output/`): `per_slide_decision.csv`, `wsi_manifest.csv`, `cohort_report.pdf`.
 
 ## Optional flags (`run_qc.py`)
 
@@ -151,6 +156,46 @@ mask, except the mask is derived from H&E morphology. **When real pathologist ma
 available**, replace `annotate.region_map()` with a lookup into that mask; `assign_cells()` is
 unchanged, and you get pathologist-grade per-cell labels.
 
+## Alignment QC report (`run_report.py`)
+
+A **non-interactive** per-slide diagnostic PDF (Agg backend, no prompts) so the whole cohort can
+be eyeballed without opening each slide by hand. It only **reads** what the pipeline already
+produced -- it never re-registers, and only reloads a whole-slide image when the warped raster
+already exists. CPU-only (just plotting). The matching and binning are reused from
+`concordance` (`mutual_nn_pairs`, `density_grids`), so the report and the QC numbers agree by
+construction.
+
+```bash
+# per slide -> output/<sample>/report.pdf (+ report.png)
+python run_report.py --samples samples.csv --config config.json --sample SLIDE_A
+# cohort triage page -> output/cohort_report.pdf
+python run_report.py --samples samples.csv --config config.json --cohort
+# whole cohort on SLURM (CPU; last task also renders the cohort page):
+sbatch --array=0-$(( $(tail -n +2 samples.csv | wc -l) - 1 )) slurm/report_array.sbatch
+```
+
+Each per-slide page has:
+
+- **Point-based panels (always)** -- from the warped nuclei + `qc.json`: DAPI-vs-warped-H&E
+  centroid scatter coloured matched/unmatched; a matched-pair displacement quiver; a histogram
+  of matched nucleus offsets (um) with the `median_um` line; the two binned nucleus-density maps
+  (DAPI, warped H&E) on the **same bins** `density_r` uses; and a text banner (`density_r`,
+  `median_um`, `occupancy`, negative-control `density_collapse`, `status`, `chosen` + rule).
+- **Raster panels (only if `registered/*.ome.tif*` exists)** -- a magenta/green DAPI-vs-H&E
+  overlay and a `SimpleITK` checkerboard mosaic. Skipped cleanly if the warped image hasn't been
+  generated (or for `coarse`/`rescued` slides without a raster -- those render point panels only).
+- **Annotation panels (only if `cell_labels.parquet` exists)** -- cells coloured by transferred
+  region label, plus a background-cell panel (cells landing off tissue = a registration smell).
+
+It handles `status == "no_nuclei"` and all four `chosen` states (`micro` / `nomicro` / `coarse`
+/ `rescued`) without crashing. `SimpleITK` is optional -- if absent, the checkerboard falls back
+to a numpy mosaic.
+
+**Human scoring (optional):** `notebooks/review_alignment.ipynb` is a thin viewer that flips
+through the generated `report.png` panels and writes `output/alignment_validation.csv`
+(`slide, chosen, aligned [0/1/2], has_fold, note`). It only reads the batch outputs and collects
+scores -- all computation stays in `report.py`.
+
 ## Self-healing: coarse-alignment fallback
 
 VALIS feature matching can lock onto a wrong solution when the H&E is grossly mis-oriented
@@ -192,15 +237,17 @@ get QC + annotations but no warped WSI; handle those manually (or with a flip-ca
 ## Layout
 
 ```
-hest_valis/        registration, segment, concordance, select, coarse_align, annotate, xenium, config
+hest_valis/        registration, segment, concordance, select, coarse_align, annotate, xenium, report, config
 run_segment.py     step 1  (StarDist env)   H&E nuclei
 run_register.py    step 2  (valis env)      register + warp nuclei, both protocols
 run_qc.py          step 3  (QC env)         metrics + per-slide selection + coarse fallback
 run_annotate.py            (QC env)         per-cell annotation transfer
 run_rescue.py              (valis env)      pre-rotate + re-register a coarse-flagged slide
 run_wsi.py                 (valis env)      warp the chosen H&E image -> OME-TIFF
+run_report.py              (QC env, CPU)    per-slide + cohort alignment QC report (PDF)
 run_select.py      aggregate decisions -> decision table + WSI manifest
-slurm/             SLURM array wrappers
+slurm/             SLURM array wrappers (qc / wsi / report)
+notebooks/         review_alignment.ipynb  thin human-scoring viewer over the reports
 env/setup.md       build the envs + the REQUIRED serial-read patch
 examples/          config.json + samples.csv templates
 ```

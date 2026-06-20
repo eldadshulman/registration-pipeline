@@ -24,13 +24,23 @@ BIN_UM = 50.0        # density-map bin size
 NEG_SHIFT_UM = 100.0 # negative-control displacement
 
 
-def _mutual_nn(A, B, cutoff_px):
+def mutual_nn_pairs(A, B, cutoff_px):
+    """Indices + distances of mutually-nearest A<->B pairs within ``cutoff_px``.
+
+    Returns (ia, ib, dist_px): A[ia[k]] is matched to B[ib[k]] at distance dist_px[k].
+    This is the single source of the matching used everywhere (QC and the report); see
+    ``_mutual_nn`` for the distance-only view the metrics use.
+    """
     ta, tb = cKDTree(A), cKDTree(B)
     dab, nab = tb.query(A, k=1)
     _, nba = ta.query(B, k=1)
     ia = np.arange(len(A))
     keep = (nba[nab] == ia) & (dab <= cutoff_px)
-    return dab[keep]
+    return ia[keep], nab[keep], dab[keep]
+
+
+def _mutual_nn(A, B, cutoff_px):
+    return mutual_nn_pairs(A, B, cutoff_px)[2]
 
 
 def _density(P, nby, nbx, bin_px):
@@ -38,6 +48,25 @@ def _density(P, nby, nbx, bin_px):
     H, _, _ = np.histogram2d(P[:, 1], P[:, 0], bins=[nby, nbx],
                              range=[[0, nby * bin_px], [0, nbx * bin_px]])
     return H
+
+
+def density_grids(he_px, xen_px, bin_px):
+    """Binned nucleus-density maps + tissue footprint, on the SAME grid ``density_r`` uses.
+
+    Returns (gh, gx, foot, nbx, nby):
+      gh   : warped-H&E nucleus-density map (nby, nbx)
+      gx   : Xenium/DAPI nucleus-density map (nby, nbx)
+      foot : tissue footprint (H&E density dilated by 2 bins), the mask density_r is scored on
+      nbx, nby : grid shape
+    The report reuses this so its density panels are exactly the bins compute_qc correlates.
+    """
+    xmax = max(he_px[:, 0].max(), xen_px[:, 0].max())
+    ymax = max(he_px[:, 1].max(), xen_px[:, 1].max())
+    nbx, nby = int(xmax / bin_px) + 1, int(ymax / bin_px) + 1
+    gh = _density(he_px, nby, nbx, bin_px)
+    gx = _density(xen_px, nby, nbx, bin_px)
+    foot = binary_dilation(gh > 0, iterations=2)
+    return gh, gx, foot, nbx, nby
 
 
 def compute_qc(he_px, xen_px, pixel_um, tissue_mask=None, mask_pixel_um=None):
@@ -65,12 +94,8 @@ def compute_qc(he_px, xen_px, pixel_um, tissue_mask=None, mask_pixel_um=None):
         "pct_within_10um": float((d <= 10).mean() * 100) if len(d) else None,
     }
 
-    # 2. density correlation (footprint-masked)
-    xmax = max(he_px[:, 0].max(), xen_px[:, 0].max())
-    ymax = max(he_px[:, 1].max(), xen_px[:, 1].max())
-    nbx, nby = int(xmax / bin_px) + 1, int(ymax / bin_px) + 1
-    gh, gx = _density(he_px, nby, nbx, bin_px), _density(xen_px, nby, nbx, bin_px)
-    foot = binary_dilation(gh > 0, iterations=2)
+    # 2. density correlation (footprint-masked) -- same grid the report reuses
+    gh, gx, foot, nbx, nby = density_grids(he_px, xen_px, bin_px)
 
     def dens_r(P):
         g = _density(P, nby, nbx, bin_px)
