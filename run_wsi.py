@@ -25,9 +25,11 @@ def main():
     s = config.get_sample(config.load_samples(a.samples), a.sample)
     out = os.path.join(cfg["output_dir"], a.sample)
     reg_out = os.path.join(out, "registered")
-    if glob.glob(os.path.join(reg_out, "*.ome.tif*")):
+    if any(registration.ometiff_pages(f) > 0
+           for f in glob.glob(os.path.join(reg_out, "*.ome.tif*"))):
         print(f"[{a.sample}] WSI exists, skip", flush=True)
         return
+    # a present-but-truncated OME-TIFF (0 pages) does NOT count as done -> fall through and re-warp
 
     micro = a.micro
     if micro < 0:

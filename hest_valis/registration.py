@@ -21,8 +21,10 @@ named 'aligned_fullres_HE.<ext>'. register_slide() handles this by symlinking yo
 name inside the per-sample work dir. Do not rename it away.
 """
 import os
-from valis_hest import preprocessing, registration
-from valis_hest.slide_io import BioFormatsSlideReader
+
+# valis_hest pulls in a JVM + BioFormats; it is imported lazily inside the functions that
+# need it (register_slide / shutdown) so this module stays importable -- and unit-testable
+# (e.g. ometiff_pages) -- without the heavy registration env.
 
 MICRO_MAX_DIM_PX = 10000  # HEST default for register_micro
 
@@ -47,6 +49,8 @@ def register_slide(he_path, dapi_path, work_dir, micro=False):
     The registrar pickle valis writes is NOT reliably reloadable, so keep this registrar
     object in-process and warp from it directly (warp_points / warp_image below).
     """
+    from valis_hest import preprocessing, registration
+    from valis_hest.slide_io import BioFormatsSlideReader
     os.makedirs(work_dir, exist_ok=True)
     reg_dir = os.path.join(work_dir, "valis_output")
     os.makedirs(reg_dir, exist_ok=True)
@@ -88,14 +92,57 @@ def warp_points(reg, xy, non_rigid=True):
     return he_slide(reg).warp_xy(xy, slide_level=0, pt_level=0, non_rigid=non_rigid, crop="reference")
 
 
+def ometiff_pages(path):
+    """Number of IFD pages in an OME-TIFF. 0 means a truncated/incomplete write: a job killed
+    mid-write leaves a multi-GB file whose page table was never finalised (BigTIFF first-IFD
+    offset still 0), so no reader can open it. Use this to tell a real WSI from a corpse."""
+    import tifffile
+    try:
+        with tifffile.TiffFile(path) as tf:
+            return len(tf.pages)
+    except Exception:
+        return 0
+
+
 def warp_image(reg, out_dir, level=0, non_rigid=True, compression="deflate"):
     """Warp the full H&E image into the Xenium frame and save an OME-TIFF in out_dir.
 
     Requires the serial-read patch in env/setup.md or valis deadlocks at the COLLECTING step.
+
+    Crash-safe write: valis streams a pyramidal OME-TIFF, so a job killed mid-write (preemption
+    / walltime / OOM) leaves a multi-GB file with an empty page table -- unreadable, yet present,
+    so a naive "skip if exists" would never regenerate it. To avoid that, warp into a sibling
+    .tmp dir, verify every output actually opens (pages > 0), then atomically move into place.
+    An interrupted run therefore leaves NO file at the canonical path, so the next run re-warps
+    instead of skipping a corpse.
     """
+    import glob
     os.makedirs(out_dir, exist_ok=True)
-    reg.warp_and_save_slides(out_dir, level=level, non_rigid=non_rigid, crop="reference",
+    tmp_dir = out_dir.rstrip("/") + ".tmp"
+    if os.path.isdir(tmp_dir):
+        for f in glob.glob(os.path.join(tmp_dir, "*")):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+    os.makedirs(tmp_dir, exist_ok=True)
+
+    reg.warp_and_save_slides(tmp_dir, level=level, non_rigid=non_rigid, crop="reference",
                              compression=compression)
+
+    written = glob.glob(os.path.join(tmp_dir, "*.ome.tif*"))
+    if not written:
+        raise RuntimeError(f"warp_image: valis wrote no OME-TIFF into {tmp_dir}")
+    for f in written:
+        if ometiff_pages(f) == 0:
+            raise RuntimeError(f"warp_image: {os.path.basename(f)} has 0 pages (truncated write); "
+                               f"leaving {out_dir} empty so the next run re-warps")
+    for f in written:                                   # all good -> publish atomically
+        os.replace(f, os.path.join(out_dir, os.path.basename(f)))
+    try:
+        os.rmdir(tmp_dir)
+    except OSError:
+        pass
     return out_dir
 
 
@@ -111,6 +158,7 @@ def prerotate_he(he_path, rotation, out_path):
 
 
 def shutdown():
+    from valis_hest import registration
     try:
         registration.kill_jvm()
     except Exception:
