@@ -170,6 +170,43 @@ qc_env/bin/python        run_qc.py       --samples samples.csv --config config.j
 valis_env/bin/python     run_wsi.py      --samples samples.csv --config config.json --sample SLIDE_A
 ```
 
+### One-command single-slide wrapper (`run_slide.py`) -- demo / debugging
+
+`run_slide.py` chains those steps for **one slide** -- register -> QC -> selection -> (optional)
+WSI warp -- and gates the expensive warp on the pipeline's own decision. It does **not**
+re-implement any QC threshold, selection, or rescue logic: it invokes the same entry points and
+consumes the `qc.json` decision, importing `config.thresholds` / `provenance.gate` for the accept
+terminology. **This is a local convenience for demos/debugging; the documented production path
+remains the SLURM arrays above.**
+
+```bash
+export PYTHONPATH=$PWD
+# per-stage envs differ (StarDist / valis / QC); each falls back to the current python if unset
+export STARDIST_PY=stardist_env/bin/python  VALIS_PY=valis_env/bin/python  QC_PY=qc_env/bin/python
+
+# register + QC + selection, then STOP and print what would happen (no warp):
+python run_slide.py --samples samples.csv --config config.json --sample SLIDE_A
+# add the expensive full-res warp -- only if selection marks the slide eligible:
+python run_slide.py --samples samples.csv --config config.json --sample SLIDE_A --warp
+python run_slide.py ... --dry-run          # print the plan + intended actions; run nothing
+python run_slide.py ... --resume           # skip stages whose valid outputs already exist
+python run_slide.py ... --force-stage qc   # re-run a stage even if its output exists (repeatable)
+```
+
+It prints a stage summary (status, selected protocol, QC values, decision reason, whether the
+warp ran, output paths) and returns a documented exit code:
+
+| code | status | meaning |
+|---|---|---|
+| 0 | `ELIGIBLE_FOR_WARP` | reached an eligible selection (and warped, if `--warp`) |
+| 2 | `REVIEW_REQUIRED` | selected but below the accept gate, or an orientation rescue (warp via `run_rescue.py --warp-image`) |
+| 3 | `QC_FAILED` | no usable registration decision |
+| 1 | (stage failed) | a stage command exited non-zero -- execution stops |
+
+The warp runs **only** with `--warp` **and** a `micro`/`nomicro` selection that passes the accept
+gate; `coarse`/`rescued` slides are reported for `run_rescue.py --warp-image`. Orchestration is
+covered by `tests/test_run_slide.py` (mocked stages).
+
 ## Use the library directly
 
 ```python
