@@ -207,6 +207,21 @@ The warp runs **only** with `--warp` **and** a `micro`/`nomicro` selection that 
 gate; `coarse`/`rescued` slides are reported for `run_rescue.py --warp-image`. Orchestration is
 covered by `tests/test_run_slide.py` (mocked stages).
 
+#### Plain shell chain (`run_slide.sh`)
+
+If you want the transparent version with **no decision logic** -- just `run_segment.py -> run_register.py
+-> run_qc.py` chained with `&&`, each in its own env -- use `run_slide.sh`. It is exactly equivalent
+to running the three commands by hand: it stops on the first failure and its exit status is the
+failing stage's status (no remapped `2`/`3` codes, no `qc.json` read-back, no warp). Selection still
+happens inside `run_qc.py`. Per-stage interpreters come from `$STARDIST_PY`/`$VALIS_PY`/`$QC_PY`.
+
+```bash
+STARDIST_PY=stardist_env/bin/python VALIS_PY=valis_env/bin/python QC_PY=qc_env/bin/python \
+  ./run_slide.sh --samples samples.csv --config config.json --sample SLIDE_A
+```
+
+Covered by `tests/test_run_slide_sh.py` (stubbed interpreters).
+
 ## Use the library directly
 
 ```python
