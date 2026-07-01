@@ -92,6 +92,29 @@ python run_provenance.py --samples samples.csv --config config.json
 #    -> output/provenance.csv  (accepted vs manual-review, per-slide audit)
 ```
 
+#### One-command cohort driver (`run_cohort.sh`)
+
+To run all five steps end to end -- in order, **blocking on each array before the next** -- use
+`run_cohort.sh`. It can't be a plain `&&` chain (each `sbatch` returns immediately, and the
+`wsi_array` size isn't known until `run_select` writes `wsi_manifest.csv`), so it launches each
+SLURM stage with `sbatch --wait` and sizes the wsi array right before submitting it.
+
+```bash
+module load slurm/slurm-compbio/23.11.10          # sbatch on PATH (Cedars)
+SELECT_PY=qc_env/bin/python \
+  ./run_cohort.sh --samples samples.csv --config config.json
+#   --dry-run      print the plan + array sizes, submit nothing
+#   --strict       abort the cohort if any array task fails (default: warn + continue)
+#   --skip-wsi / --skip-report   drop those stages (e.g. QC-only cohort pass)
+```
+
+It blocks for as long as the warp takes (hours) -- run it under `tmux`/`nohup`, or submit it as a
+tiny long-lived `defq` job (it just waits). Individual slide failures don't abort by default:
+`run_select`/`run_provenance` aggregate whatever completed and report the misses. The array TASKS
+read the `samples.csv`/`config.json` in `slurm/*.sbatch` (their EDIT-THESE block) -- keep the
+`--samples`/`--config` here pointing at the same files. Covered by `tests/test_run_cohort_sh.py`
+(stubbed `sbatch` + interpreter).
+
 `samples.csv` columns:
 
 | column | what |
