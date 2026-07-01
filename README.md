@@ -312,6 +312,25 @@ through the generated `report.png` panels and writes `output/alignment_validatio
 (`slide, chosen, aligned [0/1/2], has_fold, note`). It only reads the batch outputs and collects
 scores -- all computation stays in `report.py`.
 
+### Cohort QC overlay PDF (`run_cohort_qc.py`)
+
+A single **cohort** PDF that answers "did every slide register?" at a glance: **page 1** is a
+summary table of the **selected/final protocol per slide** + `density_r` / `median_um` +
+disposition (accepted / manual-review / rescued, from the real `provenance.gate`); then **one page
+per slide** shows the H&E nuclei (red) overlaid on the Xenium DAPI nuclei (grey) -- for the
+**selected protocol only** (the losing protocol and any failed/rescued intermediate are not drawn).
+Runs on results, no re-registration.
+
+```bash
+python run_cohort_qc.py --samples samples.csv --config config.json   # -> output/cohort_qc.pdf
+python run_cohort_qc.py --samples samples.csv --config config.json --out mycohort.pdf
+```
+
+Reads each sample's `qc.json` decision + `he_nuclei_<chosen>.npy` + the Xenium cells; slides
+without a decision/nuclei are listed and skipped, never faked. The render core
+(`render_cohort_pdf`) is importable so a legacy-format cohort can build the slide list itself and
+reuse the identical layout. Covered by `tests/test_run_cohort_qc.py`.
+
 ## Self-healing: coarse-alignment fallback
 
 VALIS feature matching can lock onto a wrong solution when the H&E is grossly mis-oriented

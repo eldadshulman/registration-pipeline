@@ -37,8 +37,8 @@ def disposition(chosen, r, u, th):
     """(label, color) from the real acceptance gate; rescue/coarse are flagged separately."""
     if chosen is None:
         return ("QC-FAILED", "#b0b0b0")
-    if chosen not in hvprov.ASIS:                       # coarse / rescued
-        return (f"rescued ({chosen})", "#3b6fb0")
+    if chosen not in hvprov.ASIS:                       # coarse / rescued (variant shown in protocol col)
+        return ("rescued", "#3b6fb0")
     if hvprov.gate(r, u, th):
         return ("accepted", "#2e8b57")
     return ("manual-review", "#d98a30")
