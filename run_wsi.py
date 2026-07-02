@@ -2,7 +2,10 @@
 """Warp the chosen-protocol H&E image into the Xenium frame -> a registered OME-TIFF.
 
 Reads the chosen protocol from <out>/<sample>/qc.json (or pass --micro 0/1 to override).
-Writes <out>/<sample>/registered/aligned_fullres_HE.ome.tiff (Xenium-frame H&E).
+Writes, into <out>/<sample>/registered/:
+  - aligned_fullres_HE.ome.tiff   the Xenium-frame H&E image (the deliverable), and
+  - he_nuclei_registered.npy      the H&E nuclei warped by the SAME registration -- a consistent
+                                  (image, nuclei) pair for the downstream cell / mask step.
 Run in the PATCHED valis_hest_env (env/setup.md) or valis deadlocks at the COLLECTING step.
   python run_wsi.py --samples samples.csv --config config.json --sample <id>
 """
@@ -25,11 +28,13 @@ def main():
     s = config.get_sample(config.load_samples(a.samples), a.sample)
     out = os.path.join(cfg["output_dir"], a.sample)
     reg_out = os.path.join(out, "registered")
-    if any(registration.ometiff_pages(f) > 0
-           for f in glob.glob(os.path.join(reg_out, "*.ome.tif*"))):
-        print(f"[{a.sample}] WSI exists, skip", flush=True)
+    nuc_out = os.path.join(reg_out, "he_nuclei_registered.npy")   # step-1 input: nuclei in Xenium frame
+    img_ok = any(registration.ometiff_pages(f) > 0
+                 for f in glob.glob(os.path.join(reg_out, "*.ome.tif*")))
+    # a present-but-truncated OME-TIFF (0 pages) does NOT count as done -> re-warp
+    if img_ok and os.path.exists(nuc_out):
+        print(f"[{a.sample}] WSI + registered nuclei exist, skip", flush=True)
         return
-    # a present-but-truncated OME-TIFF (0 pages) does NOT count as done -> fall through and re-warp
 
     micro = a.micro
     if micro < 0:
@@ -44,7 +49,18 @@ def main():
         micro = 1 if chosen == "micro" else 0
 
     reg = registration.register_slide(s["he_path"], s["dapi_path"], out, micro=bool(micro))
-    registration.warp_image(reg, reg_out, level=0, non_rigid=True)
+    if not img_ok:
+        registration.warp_image(reg, reg_out, level=0, non_rigid=True)
+    # step-1 input: warp the H&E nuclei with THIS registration so the (image, nuclei) pair the
+    # downstream cell/mask step consumes is consistent. Cheap point-warp, saved beside the OME-TIFF.
+    os.makedirs(reg_out, exist_ok=True)
+    nuc_src = os.path.join(out, "he_nuclei.npy")
+    if os.path.exists(nuc_src):
+        wn = registration.warp_points(reg, np.load(nuc_src).astype(float), non_rigid=True)
+        np.save(nuc_out, wn)
+        print(f"[{a.sample}] registered nuclei -> {nuc_out} ({len(wn)} pts)", flush=True)
+    else:
+        print(f"[{a.sample}] WARN: {nuc_src} missing (run_segment first); no registered nuclei", flush=True)
     print(f"[{a.sample}] WSI written (micro={micro}) -> {reg_out}", flush=True)
     registration.shutdown()
 

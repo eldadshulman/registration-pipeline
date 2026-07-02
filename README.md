@@ -134,6 +134,8 @@ he_nuclei_micro.npy        ... with micro refinement (absent if micro failed)
 he_nuclei_coarse.npy       ... coarse-fallback alignment (only if a rescue was needed)
 qc.json                    all variants' metrics + the chosen protocol + the rule fired
 registered/aligned_fullres_HE.ome.tiff   the warped H&E in the Xenium frame
+registered/he_nuclei_registered.npy      H&E nuclei warped by the SAME registration as the image
+                                         (a consistent image+nuclei pair for downstream cell/mask work)
 cell_labels.parquet        per-cell annotation: cell_id, x_um, y_um, he_region
 region_overlay.png         tumor/stroma/background region map (QC)
 report.pdf                 one-page alignment QC report (+ report.png for the review notebook)

@@ -58,8 +58,12 @@ def main():
         with open(os.path.join(out, "qc.json"), "w") as _f:
             json.dump(qc, _f, indent=2)
         if a.warp_image:
-            registration.warp_image(reg, os.path.join(out, "registered"), level=0, non_rigid=True)
-            print(f"[{a.sample}] rescued WSI written", flush=True)
+            reg_out = os.path.join(out, "registered")
+            registration.warp_image(reg, reg_out, level=0, non_rigid=True)
+            # step-1 input: the rescued nuclei are already consistent with this warped image (same
+            # pre-rotation + registration) -- save them beside it under the standard name run_wsi uses.
+            np.save(os.path.join(reg_out, "he_nuclei_registered.npy"), aligned)
+            print(f"[{a.sample}] rescued WSI + registered nuclei written", flush=True)
         print(f"[{a.sample}] RESCUED -> adopted (density_r {m['density_r']})", flush=True)
     else:
         print(f"[{a.sample}] rescue did not beat coarse; keeping coarse", flush=True)
